@@ -72,7 +72,11 @@ export function Chat() {
         console.error("An unknown error occurred:", error);
       }
     }
-
+    finally {
+      setIsLoading(false);
+    }
+  }
+  
   return (
     <div className="app-container">
       <Header/>
