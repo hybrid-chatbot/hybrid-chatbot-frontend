@@ -57,15 +57,21 @@ export function Chat() {
         { content: response.data.response, role: "assistant", id: traceId }
       ]);
     } catch (error) {
-      console.error("API error details:", {  // 상세 에러 정보 로깅
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-    } finally {
-      setIsLoading(false);
+      // axios에서 발생한 에러인지 먼저 확인
+      if (axios.isAxiosError(error)) {
+        console.error("API error details:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+        });
+      // 일반적인 자바스크립트 Error인지 확인
+      } else if (error instanceof Error) {
+        console.error("General error:", error.message);
+      // 정체를 알 수 없는 에러
+      } else {
+        console.error("An unknown error occurred:", error);
+      }
     }
-  }
 
   return (
     <div className="app-container">
