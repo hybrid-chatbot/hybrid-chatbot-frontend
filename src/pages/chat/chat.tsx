@@ -9,7 +9,9 @@ import {v4 as uuidv4} from 'uuid';
 import axios from 'axios';
 import '@/styles/main.css';
 
-const API_URL = "http://localhost:8080/api/messages/receive"; // MessageController API endpoint
+// 1. API 주소를 역할에 맞게 두 개로 나눕니다.
+const SEND_API_URL = "http://localhost:8080/api/messages/send"; 
+const RESULT_API_URL = "http://localhost:8080/api/messages/result"; 
 
 export function Chat() {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
@@ -17,63 +19,69 @@ export function Chat() {
   const [question, setQuestion] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // 2. 결과를 주기적으로 확인하는 새로운 함수를 만듭니다.
+  const pollForResult = (sessionId: string) => {
+    const maxRetries = 15; // 최대 15번 (30초) 시도
+    let retries = 0;
+
+    const intervalId = setInterval(async () => {
+      if (retries >= maxRetries) {
+        clearInterval(intervalId);
+        // 여기에 타임아웃 에러 처리 로직 추가 가능
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${RESULT_API_URL}/${sessionId}`);
+        
+        // 상태 코드가 200 (OK)이면 결과가 도착한 것!
+        if (response.status === 200) {
+          clearInterval(intervalId); // 폴링 중단
+          const resultMessage = response.data;
+          
+          setMessages(prev => [
+            ...prev,
+            { content: resultMessage.dialogflowResponse, role: "assistant", id: sessionId }
+          ]);
+          setIsLoading(false); // 로딩 종료
+        }
+        // 상태 코드가 202 (Accepted)이면 아직 처리 중인 것. 다음 폴링까지 대기
+      } catch (error) {
+        console.error("Polling error:", error);
+        clearInterval(intervalId); // 에러 발생 시 폴링 중단
+        setIsLoading(false);
+      }
+      retries++;
+    }, 2000); // 2초마다 확인
+  };
+
+  // 3. 기존 handleSubmit 함수는 메시지 전송만 담당하도록 수정합니다.
   async function handleSubmit(text?: string) {
     if (isLoading) return;
 
     const messageText = text || question;
     setIsLoading(true);
     
-    const traceId = uuidv4();
-    console.log('Sending message:', messageText);  // 요청 메시지 로깅
-    setMessages(prev => [...prev, { content: messageText, role: "user", id: traceId }]);
+    const sessionId = uuidv4(); // 이제 sessionId로 사용
+    setMessages(prev => [...prev, { content: messageText, role: "user", id: sessionId }]);
     setQuestion("");
 
     try {
-      console.log('API Request URL:', API_URL);  // API URL 로깅
-      console.log('Request params:', {           // 요청 파라미터 로깅
-        sessionId: traceId,
+      // POST 요청으로 메시지를 보내기만 하고, 응답을 기다리지 않습니다.
+      await axios.post(SEND_API_URL, {
+        sessionId: sessionId,
         userId: "testUser123",
         message: messageText,
         languageCode: "ko"
       });
 
-      // json으로 보내기
-      const response = await axios.post(API_URL, {
-        sessionId: traceId,
-        userId: "testUser123",
-        message: messageText,
-        languageCode: "ko"
-      });
+      // 메시지를 보내자마자 바로 폴링을 시작합니다.
+      pollForResult(sessionId);
 
-      console.log('API Response:', response.data);  // 응답 데이터 로깅
-
-      if (!response.data.response) {
-        console.error('No fulfillmentText in response:', response.data);
-        return;
-      }
-
-      setMessages(prev => [
-        ...prev,
-        { content: response.data.response, role: "assistant", id: traceId }
-      ]);
     } catch (error) {
-      // axios에서 발생한 에러인지 먼저 확인
-      if (axios.isAxiosError(error)) {
-        console.error("API error details:", {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-        });
-      // 일반적인 자바스크립트 Error인지 확인
-      } else if (error instanceof Error) {
-        console.error("General error:", error.message);
-      // 정체를 알 수 없는 에러
-      } else {
-        console.error("An unknown error occurred:", error);
-      }
-    }
-    finally {
-      setIsLoading(false);
+      console.error("Send message error:", error);
+      setIsLoading(false); // 메시지 전송 자체에 실패하면 로딩 종료
     }
   }
   
