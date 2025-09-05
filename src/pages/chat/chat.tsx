@@ -42,7 +42,7 @@ export function Chat() {
           
           setMessages(prev => [
             ...prev,
-            { content: resultMessage.analysisInfo.intentName, role: "assistant", id: sessionId }
+            { content: resultMessage.fulfillmentText, role: "assistant", id: sessionId }
           ]);
           setIsLoading(false); // 로딩 종료
         }
