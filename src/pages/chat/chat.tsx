@@ -10,7 +10,7 @@ import axios from 'axios';
 import '@/styles/main.css';
 
 // 1. API 주소를 역할에 맞게 두 개로 나눕니다.
-const SEND_API_URL = "http://localhost:8080/api/messages/send"; 
+const SEND_API_URL = "http://localhost:8080/api/messages/receive"; 
 const RESULT_API_URL = "http://localhost:8080/api/messages/result"; 
 
 export function Chat() {
