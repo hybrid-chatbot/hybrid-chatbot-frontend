@@ -5,6 +5,7 @@ import { Markdown } from './markdown';
 import { message } from "../../interfaces/interfaces"
 import { MessageActions } from '@/components/custom/actions';
 import { RoutingVisualization } from './routing-visualization';
+import { ProductMessage } from './ProductMessage';
 import '@/styles/main.css';
 
 export const PreviewMessage = ({ message, isDemoMode = false }: { message: message; isDemoMode?: boolean; }) => {
@@ -27,6 +28,11 @@ export const PreviewMessage = ({ message, isDemoMode = false }: { message: messa
             <div className="markdown">
               <Markdown>{message.content}</Markdown>
             </div>
+          )}
+
+          {/* 상품 검색 결과 표시 */}
+          {message.role === 'assistant' && message.products && message.products.length > 0 && (
+            <ProductMessage products={message.products} />
           )}
 
           {/* 분석 정보 및 라우팅 시각화 - 시연용 모드일 때만 */}
