@@ -2,7 +2,7 @@ import { ChatInput } from "@/components/custom/chatinput";
 import { PreviewMessage, ThinkingMessage } from "../../components/custom/message";
 import { useScrollToBottom } from '@/components/custom/use-scroll-to-bottom';
 import { useState } from "react";
-import { message } from "../../interfaces/interfaces"
+import { message, BackendMessage } from "../../interfaces/interfaces"
 import { Overview } from "@/components/custom/overview";
 import { Header } from "@/components/custom/header";
 import {v4 as uuidv4} from 'uuid';
@@ -18,6 +18,7 @@ export function Chat() {
   const [messages, setMessages] = useState<message[]>([]);
   const [question, setQuestion] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(true); // 시연용 모드 기본값
 
   // 2. 결과를 주기적으로 확인하는 새로운 함수를 만듭니다.
   const pollForResult = (sessionId: string) => {
@@ -38,11 +39,18 @@ export function Chat() {
         // 상태 코드가 200 (OK)이면 결과가 도착한 것!
         if (response.status === 200) {
           clearInterval(intervalId); // 폴링 중단
-          const resultMessage = response.data;
+          const resultMessage: BackendMessage = response.data;
           
+          // 새로운 데이터 형식에서 message 필드를 사용하여 메시지 생성
           setMessages(prev => [
             ...prev,
-            { content: resultMessage.message, role: "assistant", id: sessionId }
+            { 
+              content: resultMessage.message, 
+              role: resultMessage.sender === "bot" ? "assistant" : "user", 
+              id: resultMessage.id,
+              analysisInfo: resultMessage.analysisInfo,
+              analysisTrace: resultMessage.analysisTrace
+            }
           ]);
           setIsLoading(false); // 로딩 종료
         }
@@ -87,11 +95,11 @@ export function Chat() {
   
   return (
     <div className="app-container">
-      <Header/>
+      <Header isDemoMode={isDemoMode} setIsDemoMode={setIsDemoMode}/>
       <div className="messages-container" ref={messagesContainerRef}>
         {messages.length == 0 && <Overview />}
         {messages.map((message, index) => (
-          <PreviewMessage key={index} message={message} />
+          <PreviewMessage key={index} message={message} isDemoMode={isDemoMode} />
         ))}
         {isLoading && <ThinkingMessage />}
         <div ref={messagesEndRef} className="scroll-anchor"/>

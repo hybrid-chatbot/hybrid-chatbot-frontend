@@ -4,9 +4,10 @@ import { SparklesIcon } from './icons';
 import { Markdown } from './markdown';
 import { message } from "../../interfaces/interfaces"
 import { MessageActions } from '@/components/custom/actions';
+import { RoutingVisualization } from './routing-visualization';
 import '@/styles/main.css';
 
-export const PreviewMessage = ({ message }: { message: message; }) => {
+export const PreviewMessage = ({ message, isDemoMode = false }: { message: message; isDemoMode?: boolean; }) => {
   return (
     <motion.div
       className="message fade-in"
@@ -26,6 +27,37 @@ export const PreviewMessage = ({ message }: { message: message; }) => {
             <div className="markdown">
               <Markdown>{message.content}</Markdown>
             </div>
+          )}
+
+          {/* 분석 정보 및 라우팅 시각화 - 시연용 모드일 때만 */}
+          {isDemoMode && message.role === 'assistant' && message.analysisInfo && (
+            <>
+              {/* 기본 분석 정보 */}
+              <div className="analysis-info" style={{ 
+                marginTop: '8px', 
+                padding: '8px', 
+                backgroundColor: '#f5f5f5', 
+                borderRadius: '4px', 
+                fontSize: '12px',
+                color: '#666'
+              }}>
+                <div><strong>엔진:</strong> {message.analysisInfo.engine}</div>
+                <div><strong>인텐트:</strong> {message.analysisInfo.intentName}</div>
+                <div><strong>신뢰도:</strong> {(message.analysisInfo.originalIntentScore * 100).toFixed(1)}%</div>
+                {message.analysisTrace && (
+                  <>
+                    <div><strong>유사도 점수:</strong> {(message.analysisTrace.similarityScore * 100).toFixed(1)}%</div>
+                    <div><strong>안전망 판정:</strong> {message.analysisTrace.safetyNetJudgement}</div>
+                    <div><strong>최종 엔진:</strong> {message.analysisTrace.finalEngine}</div>
+                  </>
+                )}
+              </div>
+
+              {/* 라우팅 과정 시각화 */}
+              {message.analysisTrace && (
+                <RoutingVisualization message={message} />
+              )}
+            </>
           )}
 
           {message.role === 'assistant' && (
