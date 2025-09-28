@@ -30,21 +30,21 @@ export interface BackendResponse {
 
 // ===== 분석 정보 인터페이스 =====
 export interface AnalysisInfo {
-    engine: string;
-    intentName: string;
-    originalIntentName: string;
-    originalIntentScore: number;
+    engine?: string | null;
+    intentName?: string | null;
+    originalIntentName?: string | null;
+    originalIntentScore?: number | null;
 }
 
 // ===== 분석 추적 정보 인터페이스 =====
 export interface AnalysisTrace {
-    dialogflowIntent: string;
-    dialogflowScore: number;
-    similarityScore: number;
-    safetyNetJudgement: string;
-    ragFinalIntent: string | null;
-    retrievedDocuments: any | null;
-    finalEngine: string;
+    dialogflowIntent?: string | null;
+    dialogflowScore?: number | null;
+    similarityScore?: number | null;
+    safetyNetJudgement?: string | null;
+    ragFinalIntent?: string | null;
+    retrievedDocuments?: any | null;
+    finalEngine?: string | null;
 }
 
 // ===== 상품 정보 인터페이스 =====

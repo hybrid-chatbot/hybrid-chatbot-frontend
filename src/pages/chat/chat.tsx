@@ -1,10 +1,11 @@
 import { ChatInput } from "@/components/custom/chatinput";
 import { PreviewMessage, ThinkingMessage } from "../../components/custom/message";
 import { useScrollToBottom } from '@/components/custom/use-scroll-to-bottom';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { message, BackendResponse } from "../../interfaces/interfaces"
 import { Overview } from "@/components/custom/overview";
 import { Header } from "@/components/custom/header";
+import { DebugPanel } from "@/components/custom/debug-panel";
 import {v4 as uuidv4} from 'uuid';
 import axios from 'axios';
 import '@/styles/main.css';
@@ -110,52 +111,202 @@ export function Chat() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
   const [chatMode, setChatMode] = useState<'cs' | 'product_search'>('cs');
+  const [showAnalysis, setShowAnalysis] = useState<boolean>(true);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
+
+  // 디버그 로그 추가 함수
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugLogs(prev => [...prev.slice(-49), logMessage]); // 최대 50개 로그 유지
+  };
+
+  // 디버그 로그 초기화 함수
+  const clearDebugLogs = () => {
+    setDebugLogs([]);
+  };
+
+  // 개발 환경에서만 디버그 패널 표시
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      setShowDebugPanel(true);
+    }
+  }, []);
+
+  // 전역 에러 핸들러 추가
+  useEffect(() => {
+    const handleGlobalError = (event: ErrorEvent) => {
+      addDebugLog(`[GLOBAL ERROR] ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`);
+      console.error('Global error:', event);
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      addDebugLog(`[UNHANDLED REJECTION] ${event.reason}`);
+      console.error('Unhandled promise rejection:', event);
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, [addDebugLog]);
 
   // 2. 결과를 주기적으로 확인하는 새로운 함수를 만듭니다.
   const pollForResult = (sessionId: string) => {
     const maxRetries = 15; // 최대 15번 (30초) 시도
     let retries = 0;
 
+    addDebugLog(`[POLLING] 폴링 시작 - sessionId: ${sessionId}, maxRetries: ${maxRetries}`);
+
     const intervalId = setInterval(async () => {
+      addDebugLog(`[POLLING] 시도 ${retries + 1}/${maxRetries} - ${RESULT_API_URL}/${sessionId}`);
+      
       if (retries >= maxRetries) {
+        addDebugLog(`[POLLING] 최대 재시도 횟수 초과 - sessionId: ${sessionId}`);
         clearInterval(intervalId);
-        // 여기에 타임아웃 에러 처리 로직 추가 가능
+        
+        // 타임아웃 에러 메시지 추가
+        const timeoutMessage: message = {
+          content: "죄송합니다. 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.",
+          role: "assistant",
+          id: `timeout-${sessionId}`,
+          sessionId: sessionId,
+          userId: "system",
+          sender: "system",
+          languageCode: "ko",
+          timestamp: new Date().toISOString(),
+          messageType: "error"
+        };
+        
+        setMessages(prev => [...prev, timeoutMessage]);
         setIsLoading(false);
         return;
       }
 
       try {
         const response = await axios.get(`${RESULT_API_URL}/${sessionId}`);
+        addDebugLog(`[POLLING] 응답 수신 - status: ${response.status}`);
+        addDebugLog(`[POLLING] 응답 데이터: ${JSON.stringify(response.data, null, 2)}`);
         
         // 상태 코드가 200 (OK)이면 결과가 도착한 것!
         if (response.status === 200) {
+          addDebugLog(`[POLLING] 성공 - 폴링 중단`);
           clearInterval(intervalId); // 폴링 중단
-          const resultMessage: BackendResponse = response.data;
           
-          // ===== 새로운 백엔드 응답을 메시지 형태로 변환 =====
-          const assistantMessage: message = {
-            content: resultMessage.message, // 봇의 응답 텍스트
-            role: "assistant",
-            id: resultMessage.id,
-            sessionId: resultMessage.sessionId,
-            userId: resultMessage.userId,
-            sender: resultMessage.sender,
-            languageCode: resultMessage.languageCode,
-            timestamp: resultMessage.timestamp,
-            analysisInfo: resultMessage.analysisInfo,
-            analysisTrace: resultMessage.analysisTrace,
-            messageType: "text" // 기본 메시지 타입
-          };
-          
-          setMessages(prev => [
-            ...prev,
-            assistantMessage
-          ]);
-          setIsLoading(false); // 로딩 종료
+          try {
+            // 백엔드 응답 데이터 검증
+            const resultMessage: BackendResponse = response.data;
+            
+            addDebugLog(`[POLLING] 백엔드 응답 데이터: ${JSON.stringify({
+              id: resultMessage.id,
+              message: resultMessage.message,
+              analysisInfo: resultMessage.analysisInfo,
+              analysisTrace: resultMessage.analysisTrace
+            }, null, 2)}`);
+            
+            // 필수 필드 검증
+            if (!resultMessage.message) {
+              throw new Error('백엔드 응답에 message 필드가 없습니다.');
+            }
+            if (!resultMessage.id) {
+              throw new Error('백엔드 응답에 id 필드가 없습니다.');
+            }
+            
+            // ===== 새로운 백엔드 응답을 메시지 형태로 변환 =====
+            const assistantMessage: message = {
+              content: resultMessage.message || '응답을 받았지만 내용이 비어있습니다.', // 봇의 응답 텍스트
+              role: "assistant",
+              id: resultMessage.id || `fallback-${sessionId}`,
+              sessionId: resultMessage.sessionId || sessionId,
+              userId: resultMessage.userId || 'unknown',
+              sender: resultMessage.sender || 'assistant',
+              languageCode: resultMessage.languageCode || 'ko',
+              timestamp: resultMessage.timestamp || new Date().toISOString(),
+              analysisInfo: resultMessage.analysisInfo || undefined,
+              analysisTrace: resultMessage.analysisTrace || undefined,
+              messageType: "text" // 기본 메시지 타입
+            };
+            
+            addDebugLog(`[POLLING] 메시지 변환 완료: ${JSON.stringify(assistantMessage, null, 2)}`);
+            
+            setMessages(prev => [
+              ...prev,
+              assistantMessage
+            ]);
+            setIsLoading(false); // 로딩 종료
+            
+          } catch (dataError) {
+            addDebugLog(`[POLLING] 데이터 처리 오류: ${dataError instanceof Error ? dataError.message : 'Unknown error'}`);
+            
+            // 데이터 처리 오류 시 기본 메시지 생성
+            const fallbackMessage: message = {
+              content: "응답을 받았지만 데이터 처리 중 오류가 발생했습니다.",
+              role: "assistant",
+              id: `fallback-${sessionId}`,
+              sessionId: sessionId,
+              userId: "system",
+              sender: "system",
+              languageCode: "ko",
+              timestamp: new Date().toISOString(),
+              messageType: "error"
+            };
+            
+            setMessages(prev => [...prev, fallbackMessage]);
+            setIsLoading(false);
+          }
+        } else if (response.status === 202) {
+          addDebugLog(`[POLLING] 처리 중 - status: 202, 다음 폴링까지 대기`);
+        } else {
+          addDebugLog(`[POLLING] 예상치 못한 상태 코드 - status: ${response.status}`);
         }
         // 상태 코드가 202 (Accepted)이면 아직 처리 중인 것. 다음 폴링까지 대기
       } catch (error) {
-        console.error("Polling error:", error);
+        addDebugLog(`[POLLING] 에러 발생 - 시도 ${retries + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        addDebugLog(`[POLLING] 에러 상세: ${JSON.stringify({
+          error: error,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          sessionId: sessionId,
+          url: `${RESULT_API_URL}/${sessionId}`
+        }, null, 2)}`);
+        
+        // 네트워크 에러인 경우 사용자에게 알림
+        if (axios.isAxiosError(error)) {
+          if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+            addDebugLog(`[POLLING] 백엔드 서버 연결 실패: ${error.code}`);
+            const errorMessage: message = {
+              content: "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.",
+              role: "assistant",
+              id: `error-${sessionId}`,
+              sessionId: sessionId,
+              userId: "system",
+              sender: "system",
+              languageCode: "ko",
+              timestamp: new Date().toISOString(),
+              messageType: "error"
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          } else if (error.response?.status === 404) {
+            addDebugLog(`[POLLING] 세션을 찾을 수 없음: ${sessionId}`);
+            const errorMessage: message = {
+              content: "세션을 찾을 수 없습니다. 다시 시도해주세요.",
+              role: "assistant",
+              id: `error-${sessionId}`,
+              sessionId: sessionId,
+              userId: "system",
+              sender: "system",
+              languageCode: "ko",
+              timestamp: new Date().toISOString(),
+              messageType: "error"
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          }
+        }
+        
         clearInterval(intervalId); // 에러 발생 시 폴링 중단
         setIsLoading(false);
       }
@@ -165,17 +316,25 @@ export function Chat() {
 
   // 3. 기존 handleSubmit 함수는 메시지 전송만 담당하도록 수정합니다.
   async function handleSubmit(text?: string) {
-    if (isLoading) return;
+    if (isLoading) {
+      addDebugLog(`[SUBMIT] 이미 로딩 중이므로 요청 무시`);
+      return;
+    }
 
     const messageText = text || question;
+    addDebugLog(`[SUBMIT] 메시지 제출 시작 - text: "${messageText}", isDemoMode: ${isDemoMode}`);
+    
     setIsLoading(true);
     
     const sessionId = uuidv4(); // 이제 sessionId로 사용
+    addDebugLog(`[SUBMIT] 세션 ID 생성: ${sessionId}`);
+    
     setMessages(prev => [...prev, { content: messageText, role: "user", id: sessionId }]);
     setQuestion("");
 
     // 데모 모드일 때는 가짜 응답을 생성
     if (isDemoMode) {
+      addDebugLog(`[SUBMIT] 데모 모드 - 가짜 응답 생성`);
       setTimeout(() => {
         // 질문 유형에 따라 다른 분석 정보 생성
         const getDemoAnalysis = (query: string) => {
@@ -261,19 +420,84 @@ export function Chat() {
     }
 
     try {
+      addDebugLog(`[SUBMIT] 실제 모드 - 백엔드 API 호출 시작`);
+      addDebugLog(`[SUBMIT] 요청 URL: ${SEND_API_URL}`);
+      addDebugLog(`[SUBMIT] 요청 데이터: ${JSON.stringify({
+        sessionId: sessionId,
+        userId: "testUser123",
+        message: messageText,
+        languageCode: "ko"
+      }, null, 2)}`);
+
       // POST 요청으로 메시지를 보내기만 하고, 응답을 기다리지 않습니다.
-      await axios.post(SEND_API_URL, {
+      const response = await axios.post(SEND_API_URL, {
         sessionId: sessionId,
         userId: "testUser123",
         message: messageText,
         languageCode: "ko"
       });
 
+      addDebugLog(`[SUBMIT] 메시지 전송 성공 - status: ${response.status}`);
+      addDebugLog(`[SUBMIT] 폴링 시작 - sessionId: ${sessionId}`);
+
       // 메시지를 보내자마자 바로 폴링을 시작합니다.
       pollForResult(sessionId);
 
     } catch (error) {
-      console.error("Send message error:", error);
+      addDebugLog(`[SUBMIT] 메시지 전송 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addDebugLog(`[SUBMIT] 에러 상세: ${JSON.stringify({
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        url: SEND_API_URL,
+        sessionId: sessionId
+      }, null, 2)}`);
+
+      // 네트워크 에러인 경우 사용자에게 알림
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+          addDebugLog(`[SUBMIT] 백엔드 서버 연결 실패: ${error.code}`);
+          const errorMessage: message = {
+            content: "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.",
+            role: "assistant",
+            id: `error-${sessionId}`,
+            sessionId: sessionId,
+            userId: "system",
+            sender: "system",
+            languageCode: "ko",
+            timestamp: new Date().toISOString(),
+            messageType: "error"
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        } else if (error.response?.status) {
+          addDebugLog(`[SUBMIT] HTTP 에러 - status: ${error.response.status}`);
+          const errorMessage: message = {
+            content: `서버 오류가 발생했습니다. (상태 코드: ${error.response.status})`,
+            role: "assistant",
+            id: `error-${sessionId}`,
+            sessionId: sessionId,
+            userId: "system",
+            sender: "system",
+            languageCode: "ko",
+            timestamp: new Date().toISOString(),
+            messageType: "error"
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        }
+      } else {
+        const errorMessage: message = {
+          content: "알 수 없는 오류가 발생했습니다. 다시 시도해주세요.",
+          role: "assistant",
+          id: `error-${sessionId}`,
+          sessionId: sessionId,
+          userId: "system",
+          sender: "system",
+          languageCode: "ko",
+          timestamp: new Date().toISOString(),
+          messageType: "error"
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      }
+
       setIsLoading(false); // 메시지 전송 자체에 실패하면 로딩 종료
     }
   }
@@ -285,11 +509,17 @@ export function Chat() {
         setIsDemoMode={setIsDemoMode}
         chatMode={chatMode}
         setChatMode={setChatMode}
+        showAnalysis={showAnalysis}
+        setShowAnalysis={setShowAnalysis}
       />
       <div className="messages-container" ref={messagesContainerRef}>
         {messages.length === 0 && <Overview chatMode={chatMode} />}
         {messages.map((message, index) => (
-          <PreviewMessage key={message.id || index} message={message} isDemoMode={isDemoMode} />
+          <PreviewMessage 
+            key={message.id || index} 
+            message={message} 
+            showAnalysis={showAnalysis}
+          />
         ))}
         {isLoading && <ThinkingMessage />}
         <div ref={messagesEndRef} className="scroll-anchor"/>
@@ -302,6 +532,16 @@ export function Chat() {
           isLoading={isLoading}
         />
       </div>
+      
+      {/* 디버그 패널 */}
+      {showDebugPanel && (
+        <DebugPanel
+          logs={debugLogs}
+          isVisible={showDebugPanel}
+          onToggle={() => setShowDebugPanel(!showDebugPanel)}
+          onClear={clearDebugLogs}
+        />
+      )}
     </div>
   );
 };
