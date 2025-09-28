@@ -6,6 +6,40 @@ export interface message{
     id:string;
     products?: ProductCard[]; // 상품 카드 목록 추가 - 백엔드에서 전송되는 상품 데이터
     messageType?: string; // 메시지 타입 추가 - "shopping", "recommendation", "text" 등
+    analysisInfo?: ShoppingAnalysisInfo; // 분석 정보 추가
+    analysisTrace?: any; // 분석 추적 정보 추가
+}
+
+// ===== 백엔드 메시지 인터페이스 =====
+export interface BackendMessage {
+    id: string;
+    response: string;
+    messageType: string;
+    products?: ProductCard[];
+    analysisInfo?: ShoppingAnalysisInfo;
+    analysisTrace?: any;
+}
+
+// ===== 상품 정보 인터페이스 =====
+export interface ProductInfo {
+    id: number;
+    title: string;
+    image: string;
+    link: string;
+    lprice: number;
+    hprice: number;
+    mallName: string;
+    brand: string;
+    category1: string;
+    category2: string;
+    productType: string;
+    maker: string;
+    searchCount: number;
+    lastSearchedAt: string;
+    priceFormatted: string;
+    discountRate: string;
+    isRecommended: boolean;
+    recommendationReason?: string;
 }
 
 // ===== 상품 카드 인터페이스 정의 =====

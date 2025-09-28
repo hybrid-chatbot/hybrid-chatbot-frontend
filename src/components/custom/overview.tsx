@@ -1,8 +1,14 @@
 import { motion } from 'framer-motion';
-import { MessageCircle, BotIcon } from 'lucide-react';
+import { MessageCircle, BotIcon, ShoppingBag } from 'lucide-react';
 import '@/styles/main.css';
 
-export const Overview = () => {
+interface OverviewProps {
+  chatMode?: 'cs' | 'product_search';
+}
+
+export const Overview = ({ chatMode = 'cs' }: OverviewProps) => {
+  const isProductMode = chatMode === 'product_search';
+  
   return (
     <motion.div
       className="overview"
@@ -15,11 +21,22 @@ export const Overview = () => {
         <p className="icon-container">
           <BotIcon size={44}/>
           <span>+</span>
-          <MessageCircle size={44}/>
+          {isProductMode ? (
+            <ShoppingBag size={44}/>
+          ) : (
+            <MessageCircle size={44}/>
+          )}
         </p>
         <p>
-          <strong>한신몰 챗봇</strong><br />
-          <strong>궁금하신 걸 물어보세요.</strong>.
+          <strong>
+            {isProductMode ? '상품 검색 챗봇' : '한신몰 챗봇'}
+          </strong><br />
+          <strong>
+            {isProductMode 
+              ? '원하는 상품을 찾아보세요.' 
+              : '궁금하신 걸 물어보세요.'
+            }
+          </strong>
         </p>
       </div>
     </motion.div>
