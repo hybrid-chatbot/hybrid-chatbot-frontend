@@ -1,9 +1,14 @@
+// ===== 메시지 컴포넌트 업데이트 =====
+// 상품 시각화 기능을 위한 메시지 컴포넌트 확장
+// 텍스트 메시지와 상품 카드를 통합 표시
+
 import { motion } from 'framer-motion';
 import { cx } from 'classix';
 import { SparklesIcon } from './icons';
 import { Markdown } from './markdown';
 import { message } from "../../interfaces/interfaces"
 import { MessageActions } from '@/components/custom/actions';
+import { ProductGrid } from './ProductGrid'; // 상품 그리드 컴포넌트 추가
 import '@/styles/main.css';
 
 export const PreviewMessage = ({ message }: { message: message; }) => {
@@ -22,12 +27,27 @@ export const PreviewMessage = ({ message }: { message: message; }) => {
         )}
 
         <div className="message-text">
+          {/* ===== 텍스트 메시지 렌더링 ===== */}
           {message.content && (
             <div className="markdown">
               <Markdown>{message.content}</Markdown>
             </div>
           )}
 
+          {/* ===== 상품 카드 렌더링 (새로 추가된 기능) ===== */}
+          {/* 백엔드에서 전송된 상품 데이터가 있을 때만 표시 */}
+          {message.products && message.products.length > 0 && (
+            <div className="mt-4">
+              <ProductGrid 
+                products={message.products} 
+                title={message.messageType === 'shopping' ? '검색 결과' : 
+                       message.messageType === 'recommendation' ? '추천 상품' : 
+                       '상품 목록'}
+              />
+            </div>
+          )}
+
+          {/* ===== 메시지 액션 버튼들 ===== */}
           {message.role === 'assistant' && (
             <MessageActions message={message} />
           )}

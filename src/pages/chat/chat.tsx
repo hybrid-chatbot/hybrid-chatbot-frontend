@@ -40,9 +40,19 @@ export function Chat() {
           clearInterval(intervalId); // 폴링 중단
           const resultMessage = response.data;
           
+          // ===== 백엔드 응답을 메시지 형태로 변환 (상품 시각화 기능 추가) =====
+          // ShoppingMessageResponse를 프론트엔드 message 인터페이스로 변환
+          const assistantMessage = {
+            content: resultMessage.response || resultMessage.message, // 봇의 응답 텍스트
+            role: "assistant",
+            id: sessionId,
+            products: resultMessage.products || [], // 상품 카드 데이터 (새로 추가)
+            messageType: resultMessage.messageType || "text" // 메시지 타입 (새로 추가)
+          };
+          
           setMessages(prev => [
             ...prev,
-            { content: resultMessage.message, role: "assistant", id: sessionId }
+            assistantMessage
           ]);
           setIsLoading(false); // 로딩 종료
         }
