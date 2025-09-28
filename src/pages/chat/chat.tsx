@@ -2,7 +2,7 @@ import { ChatInput } from "@/components/custom/chatinput";
 import { PreviewMessage, ThinkingMessage } from "../../components/custom/message";
 import { useScrollToBottom } from '@/components/custom/use-scroll-to-bottom';
 import { useState } from "react";
-import { message } from "../../interfaces/interfaces"
+import { message, BackendResponse } from "../../interfaces/interfaces"
 import { Overview } from "@/components/custom/overview";
 import { Header } from "@/components/custom/header";
 import {v4 as uuidv4} from 'uuid';
@@ -130,16 +130,21 @@ export function Chat() {
         // 상태 코드가 200 (OK)이면 결과가 도착한 것!
         if (response.status === 200) {
           clearInterval(intervalId); // 폴링 중단
-          const resultMessage = response.data;
+          const resultMessage: BackendResponse = response.data;
           
-          // ===== 백엔드 응답을 메시지 형태로 변환 (상품 시각화 기능 추가) =====
-          // ShoppingMessageResponse를 프론트엔드 message 인터페이스로 변환
-          const assistantMessage = {
-            content: resultMessage.response || resultMessage.message, // 봇의 응답 텍스트
+          // ===== 새로운 백엔드 응답을 메시지 형태로 변환 =====
+          const assistantMessage: message = {
+            content: resultMessage.message, // 봇의 응답 텍스트
             role: "assistant",
-            id: sessionId,
-            products: resultMessage.products || [], // 상품 카드 데이터 (새로 추가)
-            messageType: resultMessage.messageType || "text" // 메시지 타입 (새로 추가)
+            id: resultMessage.id,
+            sessionId: resultMessage.sessionId,
+            userId: resultMessage.userId,
+            sender: resultMessage.sender,
+            languageCode: resultMessage.languageCode,
+            timestamp: resultMessage.timestamp,
+            analysisInfo: resultMessage.analysisInfo,
+            analysisTrace: resultMessage.analysisTrace,
+            messageType: "text" // 기본 메시지 타입
           };
           
           setMessages(prev => [
@@ -168,6 +173,92 @@ export function Chat() {
     const sessionId = uuidv4(); // 이제 sessionId로 사용
     setMessages(prev => [...prev, { content: messageText, role: "user", id: sessionId }]);
     setQuestion("");
+
+    // 데모 모드일 때는 가짜 응답을 생성
+    if (isDemoMode) {
+      setTimeout(() => {
+        // 질문 유형에 따라 다른 분석 정보 생성
+        const getDemoAnalysis = (query: string) => {
+          const lowerQuery = query.toLowerCase();
+          
+          if (lowerQuery.includes('스마트폰') || lowerQuery.includes('아이폰') || lowerQuery.includes('갤럭시')) {
+            return {
+              analysisInfo: {
+                engine: "dialogflow",
+                intentName: "product_search",
+                originalIntentName: "product_search",
+                originalIntentScore: 0.94
+              },
+              analysisTrace: {
+                dialogflowIntent: "product_search",
+                dialogflowScore: 0.94,
+                similarityScore: 0.91,
+                safetyNetJudgement: "안전망 통과",
+                ragFinalIntent: "product_search",
+                retrievedDocuments: null,
+                finalEngine: "dialogflow"
+              }
+            };
+          } else if (lowerQuery.includes('고객') || lowerQuery.includes('문의') || lowerQuery.includes('도움')) {
+            return {
+              analysisInfo: {
+                engine: "rag",
+                intentName: "customer_service",
+                originalIntentName: "customer_service",
+                originalIntentScore: 0.87
+              },
+              analysisTrace: {
+                dialogflowIntent: "customer_service",
+                dialogflowScore: 0.75,
+                similarityScore: 0.82,
+                safetyNetJudgement: "안전망 통과",
+                ragFinalIntent: "customer_service",
+                retrievedDocuments: "고객센터 FAQ 문서 3개 검색됨",
+                finalEngine: "rag"
+              }
+            };
+          } else {
+            return {
+              analysisInfo: {
+                engine: "similarity",
+                intentName: "general_query",
+                originalIntentName: "general_query",
+                originalIntentScore: 0.78
+              },
+              analysisTrace: {
+                dialogflowIntent: "general_query",
+                dialogflowScore: 0.65,
+                similarityScore: 0.78,
+                safetyNetJudgement: "안전망 통과",
+                ragFinalIntent: null,
+                retrievedDocuments: null,
+                finalEngine: "similarity"
+              }
+            };
+          }
+        };
+
+        const demoAnalysis = getDemoAnalysis(messageText);
+        
+        const demoResponse: message = {
+          content: `데모 모드: "${messageText}"에 대한 응답입니다.\n\n실제 서비스에서는 AI가 다음과 같은 과정을 거쳐 답변을 제공합니다:\n1. Dialogflow로 의도 분석\n2. 유사도 검증\n3. 안전망 판정\n4. 최종 엔진 선택`,
+          role: "assistant",
+          id: `demo-${sessionId}`,
+          sessionId: sessionId,
+          userId: "demoUser",
+          sender: "assistant",
+          languageCode: "ko",
+          timestamp: new Date().toISOString(),
+          analysisInfo: demoAnalysis.analysisInfo,
+          analysisTrace: demoAnalysis.analysisTrace,
+          messageType: "text"
+        };
+        
+        setMessages(prev => [...prev, demoResponse]);
+        setIsLoading(false);
+      }, 2000); // 2초 후 응답
+      return;
+    }
 
     try {
       // POST 요청으로 메시지를 보내기만 하고, 응답을 기다리지 않습니다.

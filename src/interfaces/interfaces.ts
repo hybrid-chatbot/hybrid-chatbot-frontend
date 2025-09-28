@@ -6,18 +6,45 @@ export interface message{
     id:string;
     products?: ProductCard[]; // 상품 카드 목록 추가 - 백엔드에서 전송되는 상품 데이터
     messageType?: string; // 메시지 타입 추가 - "shopping", "recommendation", "text" 등
-    analysisInfo?: ShoppingAnalysisInfo; // 분석 정보 추가
-    analysisTrace?: any; // 분석 추적 정보 추가
+    analysisInfo?: AnalysisInfo; // 분석 정보 추가
+    analysisTrace?: AnalysisTrace; // 분석 추적 정보 추가
+    sessionId?: string; // 세션 ID 추가
+    userId?: string; // 사용자 ID 추가
+    sender?: string; // 발신자 추가
+    languageCode?: string; // 언어 코드 추가
+    timestamp?: string; // 타임스탬프 추가
 }
 
-// ===== 백엔드 메시지 인터페이스 =====
-export interface BackendMessage {
+// ===== 새로운 백엔드 응답 형식 인터페이스 =====
+export interface BackendResponse {
     id: string;
-    response: string;
-    messageType: string;
-    products?: ProductCard[];
-    analysisInfo?: ShoppingAnalysisInfo;
-    analysisTrace?: any;
+    sessionId: string;
+    userId: string;
+    sender: string;
+    message: string;
+    languageCode: string;
+    timestamp: string;
+    analysisInfo: AnalysisInfo;
+    analysisTrace: AnalysisTrace;
+}
+
+// ===== 분석 정보 인터페이스 =====
+export interface AnalysisInfo {
+    engine: string;
+    intentName: string;
+    originalIntentName: string;
+    originalIntentScore: number;
+}
+
+// ===== 분석 추적 정보 인터페이스 =====
+export interface AnalysisTrace {
+    dialogflowIntent: string;
+    dialogflowScore: number;
+    similarityScore: number;
+    safetyNetJudgement: string;
+    ragFinalIntent: string | null;
+    retrievedDocuments: any | null;
+    finalEngine: string;
 }
 
 // ===== 상품 정보 인터페이스 =====

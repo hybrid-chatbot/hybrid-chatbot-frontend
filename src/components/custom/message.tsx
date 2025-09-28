@@ -9,6 +9,7 @@ import { Markdown } from './markdown';
 import { message } from "../../interfaces/interfaces"
 import { MessageActions } from '@/components/custom/actions';
 import { ProductGrid } from './ProductGrid'; // 상품 그리드 컴포넌트 추가
+import { AnalysisDisplay } from './analysis-display'; // 분석 정보 표시 컴포넌트 추가
 import '@/styles/main.css';
 
 interface PreviewMessageProps {
@@ -50,6 +51,15 @@ export const PreviewMessage = ({ message, isDemoMode = false }: PreviewMessagePr
                        '상품 목록'}
               />
             </div>
+          )}
+
+          {/* ===== 분석 정보 표시 (시연 모드에서만) ===== */}
+          {/* 시연 모드이고 분석 정보가 있을 때만 표시 */}
+          {isDemoMode && message.role === 'assistant' && message.analysisInfo && message.analysisTrace && (
+            <AnalysisDisplay 
+              analysisInfo={message.analysisInfo} 
+              analysisTrace={message.analysisTrace} 
+            />
           )}
 
           {/* ===== 메시지 액션 버튼들 ===== */}
