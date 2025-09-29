@@ -10,9 +10,10 @@ import {v4 as uuidv4} from 'uuid';
 import axios from 'axios';
 import '@/styles/main.css';
 
-// 1. API 주소를 역할에 맞게 두 개로 나눕니다.
-const SEND_API_URL = "http://localhost:8080/api/messages/receive"; 
-const RESULT_API_URL = "http://localhost:8080/api/messages/result"; 
+// 1. API 주소를 역할에 맞게 나눕니다.
+const CS_SEND_API_URL = "http://localhost:8080/api/messages/receive"; 
+const CS_RESULT_API_URL = "http://localhost:8080/api/messages/result";
+const PRODUCT_SEARCH_API_URL = "http://localhost:8080/api/products/search"; 
 
 export function Chat() {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
@@ -156,7 +157,67 @@ export function Chat() {
     };
   }, [addDebugLog]);
 
-  // 2. 결과를 주기적으로 확인하는 새로운 함수를 만듭니다.
+  // 2. 상품 검색 함수
+  const searchProducts = async (query: string, sessionId: string) => {
+    addDebugLog(`[PRODUCT_SEARCH] 상품 검색 시작 - query: "${query}"`);
+    
+    try {
+      const response = await axios.post(PRODUCT_SEARCH_API_URL, {
+        query: query,
+        sessionId: sessionId,
+        userId: "testUser123",
+        languageCode: "ko"
+      });
+
+      addDebugLog(`[PRODUCT_SEARCH] 상품 검색 응답 - status: ${response.status}`);
+      addDebugLog(`[PRODUCT_SEARCH] 상품 검색 데이터: ${JSON.stringify(response.data, null, 2)}`);
+
+      if (response.status === 200) {
+        const searchResult = response.data;
+        
+        // 상품 검색 결과를 메시지로 변환
+        const productMessage: message = {
+          content: searchResult.message || `"${query}"에 대한 검색 결과입니다.`,
+          role: "assistant",
+          id: `product-${sessionId}`,
+          sessionId: sessionId,
+          userId: "testUser123",
+          sender: "assistant",
+          languageCode: "ko",
+          timestamp: new Date().toISOString(),
+          products: searchResult.products || [],
+          analysisInfo: searchResult.analysisInfo,
+          analysisTrace: searchResult.analysisTrace,
+          messageType: "shopping"
+        };
+
+        addDebugLog(`[PRODUCT_SEARCH] 상품 메시지 생성 완료: ${JSON.stringify(productMessage, null, 2)}`);
+
+        setMessages(prev => [...prev, productMessage]);
+        setIsLoading(false);
+      }
+    } catch (error) {
+      addDebugLog(`[PRODUCT_SEARCH] 상품 검색 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // 상품 검색 실패 시 에러 메시지
+      const errorMessage: message = {
+        content: "상품 검색 중 오류가 발생했습니다. 다시 시도해주세요.",
+        role: "assistant",
+        id: `error-${sessionId}`,
+        sessionId: sessionId,
+        userId: "system",
+        sender: "system",
+        languageCode: "ko",
+        timestamp: new Date().toISOString(),
+        messageType: "error"
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setIsLoading(false);
+    }
+  };
+
+  // 3. CS 상담 결과를 주기적으로 확인하는 함수
   const pollForResult = (sessionId: string) => {
     const maxRetries = 15; // 최대 15번 (30초) 시도
     let retries = 0;
@@ -164,7 +225,7 @@ export function Chat() {
     addDebugLog(`[POLLING] 폴링 시작 - sessionId: ${sessionId}, maxRetries: ${maxRetries}`);
 
     const intervalId = setInterval(async () => {
-      addDebugLog(`[POLLING] 시도 ${retries + 1}/${maxRetries} - ${RESULT_API_URL}/${sessionId}`);
+        addDebugLog(`[POLLING] 시도 ${retries + 1}/${maxRetries} - ${CS_RESULT_API_URL}/${sessionId}`);
       
       if (retries >= maxRetries) {
         addDebugLog(`[POLLING] 최대 재시도 횟수 초과 - sessionId: ${sessionId}`);
@@ -189,7 +250,7 @@ export function Chat() {
       }
 
       try {
-        const response = await axios.get(`${RESULT_API_URL}/${sessionId}`);
+        const response = await axios.get(`${CS_RESULT_API_URL}/${sessionId}`);
         addDebugLog(`[POLLING] 응답 수신 - status: ${response.status}`);
         addDebugLog(`[POLLING] 응답 데이터: ${JSON.stringify(response.data, null, 2)}`);
         
@@ -271,7 +332,7 @@ export function Chat() {
           error: error,
           message: error instanceof Error ? error.message : 'Unknown error',
           sessionId: sessionId,
-          url: `${RESULT_API_URL}/${sessionId}`
+          url: `${CS_RESULT_API_URL}/${sessionId}`
         }, null, 2)}`);
         
         // 네트워크 에러인 경우 사용자에게 알림
@@ -314,7 +375,7 @@ export function Chat() {
     }, 2000); // 2초마다 확인
   };
 
-  // 3. 기존 handleSubmit 함수는 메시지 전송만 담당하도록 수정합니다.
+  // 4. 메시지 제출 함수 - 채팅 모드에 따라 다른 처리
   async function handleSubmit(text?: string) {
     if (isLoading) {
       addDebugLog(`[SUBMIT] 이미 로딩 중이므로 요청 무시`);
@@ -322,7 +383,7 @@ export function Chat() {
     }
 
     const messageText = text || question;
-    addDebugLog(`[SUBMIT] 메시지 제출 시작 - text: "${messageText}", isDemoMode: ${isDemoMode}`);
+    addDebugLog(`[SUBMIT] 메시지 제출 시작 - text: "${messageText}", isDemoMode: ${isDemoMode}, chatMode: ${chatMode}`);
     
     setIsLoading(true);
     
@@ -399,8 +460,44 @@ export function Chat() {
 
         const demoAnalysis = getDemoAnalysis(messageText);
         
+        // 채팅 모드에 따라 다른 데모 응답 생성
+        let demoContent: string;
+        let demoProducts: any[] = [];
+        let demoMessageType: string = "text";
+        
+        if (chatMode === 'product_search') {
+          demoContent = `데모 모드: "${messageText}"에 대한 상품 검색 결과입니다.\n\n실제 서비스에서는 상품 검색 API를 통해 관련 상품을 찾아 제공합니다.`;
+          demoMessageType = "shopping";
+          
+          // 데모용 상품 데이터 생성
+          demoProducts = [
+            {
+              id: 1,
+              title: `데모 상품: ${messageText}`,
+              image: "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400&h=300&fit=crop",
+              link: "#",
+              lprice: 50000,
+              hprice: 80000,
+              mallName: "데모몰",
+              brand: "데모브랜드",
+              category1: "데모카테고리",
+              category2: "데모서브카테고리",
+              productType: "데모상품",
+              maker: "데모제조사",
+              searchCount: 100,
+              lastSearchedAt: new Date().toISOString(),
+              priceFormatted: "50,000원",
+              discountRate: "10%",
+              isRecommended: true,
+              recommendationReason: "데모 추천 상품"
+            }
+          ];
+        } else {
+          demoContent = `데모 모드: "${messageText}"에 대한 CS 상담 응답입니다.\n\n실제 서비스에서는 AI가 다음과 같은 과정을 거쳐 답변을 제공합니다:\n1. Dialogflow로 의도 분석\n2. 유사도 검증\n3. 안전망 판정\n4. 최종 엔진 선택`;
+        }
+        
         const demoResponse: message = {
-          content: `데모 모드: "${messageText}"에 대한 응답입니다.\n\n실제 서비스에서는 AI가 다음과 같은 과정을 거쳐 답변을 제공합니다:\n1. Dialogflow로 의도 분석\n2. 유사도 검증\n3. 안전망 판정\n4. 최종 엔진 선택`,
+          content: demoContent,
           role: "assistant",
           id: `demo-${sessionId}`,
           sessionId: sessionId,
@@ -410,7 +507,8 @@ export function Chat() {
           timestamp: new Date().toISOString(),
           analysisInfo: demoAnalysis.analysisInfo,
           analysisTrace: demoAnalysis.analysisTrace,
-          messageType: "text"
+          products: demoProducts,
+          messageType: demoMessageType
         };
         
         setMessages(prev => [...prev, demoResponse]);
@@ -420,35 +518,41 @@ export function Chat() {
     }
 
     try {
-      addDebugLog(`[SUBMIT] 실제 모드 - 백엔드 API 호출 시작`);
-      addDebugLog(`[SUBMIT] 요청 URL: ${SEND_API_URL}`);
-      addDebugLog(`[SUBMIT] 요청 데이터: ${JSON.stringify({
-        sessionId: sessionId,
-        userId: "testUser123",
-        message: messageText,
-        languageCode: "ko"
-      }, null, 2)}`);
+      // 채팅 모드에 따라 다른 API 호출
+      if (chatMode === 'product_search') {
+        addDebugLog(`[SUBMIT] 상품 검색 모드 - 상품 검색 API 호출`);
+        await searchProducts(messageText, sessionId);
+      } else {
+        addDebugLog(`[SUBMIT] CS 상담 모드 - CS 상담 API 호출 시작`);
+        addDebugLog(`[SUBMIT] 요청 URL: ${CS_SEND_API_URL}`);
+        addDebugLog(`[SUBMIT] 요청 데이터: ${JSON.stringify({
+          sessionId: sessionId,
+          userId: "testUser123",
+          message: messageText,
+          languageCode: "ko"
+        }, null, 2)}`);
 
-      // POST 요청으로 메시지를 보내기만 하고, 응답을 기다리지 않습니다.
-      const response = await axios.post(SEND_API_URL, {
-        sessionId: sessionId,
-        userId: "testUser123",
-        message: messageText,
-        languageCode: "ko"
-      });
+        // POST 요청으로 메시지를 보내기만 하고, 응답을 기다리지 않습니다.
+        const response = await axios.post(CS_SEND_API_URL, {
+          sessionId: sessionId,
+          userId: "testUser123",
+          message: messageText,
+          languageCode: "ko"
+        });
 
-      addDebugLog(`[SUBMIT] 메시지 전송 성공 - status: ${response.status}`);
-      addDebugLog(`[SUBMIT] 폴링 시작 - sessionId: ${sessionId}`);
+        addDebugLog(`[SUBMIT] 메시지 전송 성공 - status: ${response.status}`);
+        addDebugLog(`[SUBMIT] 폴링 시작 - sessionId: ${sessionId}`);
 
-      // 메시지를 보내자마자 바로 폴링을 시작합니다.
-      pollForResult(sessionId);
+        // 메시지를 보내자마자 바로 폴링을 시작합니다.
+        pollForResult(sessionId);
+      }
 
     } catch (error) {
-      addDebugLog(`[SUBMIT] 메시지 전송 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addDebugLog(`[SUBMIT] ${chatMode === 'product_search' ? '상품 검색' : 'CS 상담'} 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
       addDebugLog(`[SUBMIT] 에러 상세: ${JSON.stringify({
         error: error,
         message: error instanceof Error ? error.message : 'Unknown error',
-        url: SEND_API_URL,
+        chatMode: chatMode,
         sessionId: sessionId
       }, null, 2)}`);
 
@@ -457,7 +561,7 @@ export function Chat() {
         if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
           addDebugLog(`[SUBMIT] 백엔드 서버 연결 실패: ${error.code}`);
           const errorMessage: message = {
-            content: "백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.",
+            content: `백엔드 서버에 연결할 수 없습니다. ${chatMode === 'product_search' ? '상품 검색' : 'CS 상담'} 서버가 실행 중인지 확인해주세요.`,
             role: "assistant",
             id: `error-${sessionId}`,
             sessionId: sessionId,
@@ -471,7 +575,7 @@ export function Chat() {
         } else if (error.response?.status) {
           addDebugLog(`[SUBMIT] HTTP 에러 - status: ${error.response.status}`);
           const errorMessage: message = {
-            content: `서버 오류가 발생했습니다. (상태 코드: ${error.response.status})`,
+            content: `${chatMode === 'product_search' ? '상품 검색' : 'CS 상담'} 서버 오류가 발생했습니다. (상태 코드: ${error.response.status})`,
             role: "assistant",
             id: `error-${sessionId}`,
             sessionId: sessionId,
@@ -485,7 +589,7 @@ export function Chat() {
         }
       } else {
         const errorMessage: message = {
-          content: "알 수 없는 오류가 발생했습니다. 다시 시도해주세요.",
+          content: `${chatMode === 'product_search' ? '상품 검색' : 'CS 상담'} 중 알 수 없는 오류가 발생했습니다. 다시 시도해주세요.`,
           role: "assistant",
           id: `error-${sessionId}`,
           sessionId: sessionId,
