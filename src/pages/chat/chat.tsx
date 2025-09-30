@@ -13,99 +13,17 @@ import '@/styles/main.css';
 // 1. API 주소를 역할에 맞게 나눕니다.
 const CS_SEND_API_URL = "http://localhost:8080/api/messages/receive"; 
 const CS_RESULT_API_URL = "http://localhost:8080/api/messages/result";
-const PRODUCT_SEARCH_API_URL = "http://localhost:8080/api/products/search"; 
+const PRODUCT_SEARCH_API_URL = "http://localhost:8080/api/shopping/search"; 
 
 export function Chat() {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
   const [messages, setMessages] = useState<message[]>([
-    // 예시 상품 데이터가 포함된 초기 메시지
+    // 간단한 초기 인사말만 표시
     {
-      content: "안녕하세요! 쇼핑 도우미입니다. 어떤 상품을 찾고 계신가요?",
+      content: "안녕하세요! 무엇을 도와드릴까요요?",
       role: "assistant",
       id: "welcome-message",
-      products: [
-        {
-          id: 1,
-          title: "Apple iPhone 15 Pro 128GB 자연티타늄",
-          image: "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?w=400&h=300&fit=crop",
-          link: "https://www.apple.com/kr/iphone-15-pro/",
-          lprice: 1350000,
-          hprice: 1500000,
-          mallName: "Apple Store",
-          brand: "Apple",
-          category1: "디지털/가전",
-          category2: "스마트폰",
-          productType: "스마트폰",
-          maker: "Apple",
-          searchCount: 1250,
-          lastSearchedAt: "2024-01-15T10:30:00Z",
-          priceFormatted: "1,350,000원",
-          discountRate: "10%",
-          isRecommended: true,
-          recommendationReason: "최신 모델, 고성능"
-        },
-        {
-          id: 2,
-          title: "Samsung Galaxy S24 Ultra 256GB 티타늄 그레이",
-          image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=300&fit=crop",
-          link: "https://www.samsung.com/kr/smartphones/galaxy-s24-ultra/",
-          lprice: 1200000,
-          hprice: 1350000,
-          mallName: "Samsung",
-          brand: "Samsung",
-          category1: "디지털/가전",
-          category2: "스마트폰",
-          productType: "스마트폰",
-          maker: "Samsung",
-          searchCount: 980,
-          lastSearchedAt: "2024-01-14T15:20:00Z",
-          priceFormatted: "1,200,000원",
-          discountRate: "5%",
-          isRecommended: false,
-          recommendationReason: ""
-        },
-        {
-          id: 3,
-          title: "MacBook Pro 14인치 M3 Pro 칩 512GB 스페이스 그레이",
-          image: "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop",
-          link: "https://www.apple.com/kr/macbook-pro-14/",
-          lprice: 2500000,
-          hprice: 2800000,
-          mallName: "Apple Store",
-          brand: "Apple",
-          category1: "디지털/가전",
-          category2: "노트북",
-          productType: "노트북",
-          maker: "Apple",
-          searchCount: 750,
-          lastSearchedAt: "2024-01-13T09:15:00Z",
-          priceFormatted: "2,500,000원",
-          discountRate: "15%",
-          isRecommended: true,
-          recommendationReason: "프리미엄 성능"
-        },
-        {
-          id: 4,
-          title: "Sony WH-1000XM5 무선 노이즈 캔슬링 헤드폰",
-          image: "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=300&fit=crop",
-          link: "https://www.sony.co.kr/electronics/headphones/wh-1000xm5",
-          lprice: 450000,
-          hprice: 500000,
-          mallName: "Sony",
-          brand: "Sony",
-          category1: "디지털/가전",
-          category2: "오디오",
-          productType: "헤드폰",
-          maker: "Sony",
-          searchCount: 320,
-          lastSearchedAt: "2024-01-12T14:45:00Z",
-          priceFormatted: "450,000원",
-          discountRate: "8%",
-          isRecommended: false,
-          recommendationReason: ""
-        }
-      ],
-      messageType: "recommendation"
+      messageType: "text"
     }
   ]);
   const [question, setQuestion] = useState<string>("");
@@ -177,7 +95,7 @@ export function Chat() {
         
         // 상품 검색 결과를 메시지로 변환
         const productMessage: message = {
-          content: searchResult.message || `"${query}"에 대한 검색 결과입니다.`,
+          content: searchResult.response || `"${query}"에 대한 검색 결과입니다.`,
           role: "assistant",
           id: `product-${sessionId}`,
           sessionId: sessionId,
