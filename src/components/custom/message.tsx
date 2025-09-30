@@ -11,7 +11,12 @@ import { MessageActions } from '@/components/custom/actions';
 import { ProductGrid } from './ProductGrid'; // 상품 그리드 컴포넌트 추가
 import '@/styles/main.css';
 
-export const PreviewMessage = ({ message }: { message: message; }) => {
+interface PreviewMessageProps {
+  message: message;
+  isDemoMode?: boolean;
+}
+
+export const PreviewMessage = ({ message, isDemoMode = false }: PreviewMessageProps) => {
   return (
     <motion.div
       className="message fade-in"
