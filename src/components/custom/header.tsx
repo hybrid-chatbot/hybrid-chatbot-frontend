@@ -1,15 +1,17 @@
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, ShoppingBag, Play, Square } from "lucide-react";
+import { MessageCircle, ShoppingBag, Play, Square, BarChart3, Eye } from "lucide-react";
 
 interface HeaderProps {
   isDemoMode: boolean;
   setIsDemoMode: (value: boolean) => void;
   chatMode: 'cs' | 'product_search';
   setChatMode: (mode: 'cs' | 'product_search') => void;
+  showAnalysis: boolean;
+  setShowAnalysis: (value: boolean) => void;
 }
 
-export const Header = ({ isDemoMode, setIsDemoMode, chatMode, setChatMode }: HeaderProps) => {
+export const Header = ({ isDemoMode, setIsDemoMode, chatMode, setChatMode, showAnalysis, setShowAnalysis }: HeaderProps) => {
   return (
     <>
       <header className="flex items-center justify-between px-2 sm:px-4 py-2 bg-background text-black dark:text-white w-full">
@@ -38,6 +40,26 @@ export const Header = ({ isDemoMode, setIsDemoMode, chatMode, setChatMode }: Hea
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* 분석 정보 표시 토글 */}
+          <Button
+            variant={showAnalysis ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowAnalysis(!showAnalysis)}
+            className="h-8 px-3"
+          >
+            {showAnalysis ? (
+              <>
+                <BarChart3 className="w-4 h-4 mr-1" />
+                분석 숨기기
+              </>
+            ) : (
+              <>
+                <Eye className="w-4 h-4 mr-1" />
+                분석 보기
+              </>
+            )}
+          </Button>
+
           {/* 데모 모드 토글 */}
           <Button
             variant="outline"
