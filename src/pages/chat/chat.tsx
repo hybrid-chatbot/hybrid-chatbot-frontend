@@ -13,7 +13,7 @@ import '@/styles/main.css';
 // 1. API 주소를 역할에 맞게 나눕니다.
 const CS_SEND_API_URL = "http://localhost:8080/api/messages/receive"; 
 const CS_RESULT_API_URL = "http://localhost:8080/api/messages/result";
-const PRODUCT_SEARCH_API_URL = "http://localhost:8080/api/shopping/search"; 
+const PRODUCT_SEARCH_API_URL = "http://localhost:8080/api/shopping-chat/search"; 
 
 export function Chat() {
   const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
@@ -81,7 +81,7 @@ export function Chat() {
     
     try {
       const response = await axios.post(PRODUCT_SEARCH_API_URL, {
-        query: query,
+        message: query,
         sessionId: sessionId,
         userId: "testUser123",
         languageCode: "ko"
