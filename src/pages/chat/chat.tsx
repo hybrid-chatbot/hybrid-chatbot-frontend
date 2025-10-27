@@ -80,6 +80,21 @@ export function Chat() {
     addDebugLog(`[PRODUCT_SEARCH] 상품 검색 시작 - query: "${query}"`);
     
     try {
+      // 먼저 DB 초기화 및 데이터 수집 확인
+      addDebugLog(`[PRODUCT_SEARCH] DB 초기화 요청 전송`);
+      try {
+        await axios.post('http://localhost:8080/api/shopping-chat/init-db', {
+          message: query,
+          sessionId: sessionId,
+          userId: "testUser123",
+          languageCode: "ko"
+        });
+        addDebugLog(`[PRODUCT_SEARCH] DB 초기화 완료`);
+      } catch (initError) {
+        addDebugLog(`[PRODUCT_SEARCH] DB 초기화 중 오류 (무시): ${initError instanceof Error ? initError.message : 'Unknown error'}`);
+      }
+      
+      // 상품 검색 수행
       const response = await axios.post(PRODUCT_SEARCH_API_URL, {
         message: query,
         sessionId: sessionId,
